@@ -1,0 +1,78 @@
+import os
+import time
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+# E-Mail-Konfiguration
+smtp_server = 'smtp.example.com'  # SMTP-Server deines E-Mail-Providers smtp_port = 587  # SMTP-Port smtp_user = 'deine.email@example.com'  # Deine E-Mail-Adresse smtp_password = 'deinpasswort'  # Dein E-Mail-Passwort email_to = 'ziel.email@example.com'  # Ziel-E-Mail-Adresse
+
+# Pfad zum zu durchsuchenden Laufwerk/Ordner directory_to_search = 'D:\\'  # Ändere diesen Pfad nach Bedarf
+
+# Aktuelle Zeit in Sekunden seit der Epoch (01.01.1970) current_time = time.time()
+
+# Ein Tag in Sekunden
+one_day_in_seconds = 24 * 60 * 60
+
+# Mindestgröße in Bytes (10 MB)
+min_size_in_bytes = 10 * 1024 * 1024
+
+# Funktion zum Überprüfen der Dateien
+def check_files(directory):
+    result = []
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            file_path = os.path.join(root, file)
+            try:
+                file_stats = os.stat(file_path)
+                file_size = file_stats.st_size
+                file_mtime = file_stats.st_mtime
+
+                # Überprüfen, ob die Datei jünger als ein Tag ist und mindestens 10 MB groß ist
+                if (current_time - file_mtime) < one_day_in_seconds and file_size >= min_size_in_bytes:
+                    result.append({
+                        'path': file_path,
+                        'size': file_size,
+                        'mtime': time.ctime(file_mtime)
+                    })
+
+            except FileNotFoundError:
+                # Datei wurde möglicherweise während der Überprüfung gelöscht
+                continue
+    return result
+
+# Funktion zum Senden einer E-Mail
+def send_email(subject, body):
+    msg = MIMEMultipart()
+    msg['From'] = smtp_user
+    msg['To'] = email_to
+    msg['Subject'] = subject
+
+    msg.attach(MIMEText(body, 'plain'))
+
+    try:
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(smtp_user, smtp_password)
+        text = msg.as_string()
+        server.sendmail(smtp_user, email_to, text)
+        server.quit()
+        print('E-Mail erfolgreich gesendet')
+    except Exception as e:
+        print(f'Fehler beim Senden der E-Mail: {e}')
+
+# Hauptskript
+if __name__ == "__main__":
+    files = check_files(directory_to_search)
+
+    if files:
+        email_subject = "Gefundene Dateien: Weniger als ein Tag alt und größer als 10MB"
+        email_body = "Hier sind die gefundenen Dateien:\n\n"
+        for file in files:
+            email_body += f"Pfad: {file['path']}\n"
+            email_body += f"Größe: {file['size'] / (1024 * 1024):.2f} MB\n"
+            email_body += f"Letzte Änderung: {file['mtime']}\n\n"
+
+        send_email(email_subject, email_body)
+    else:
+        print("Keine Dateien gefunden, die den Kriterien entsprechen.")
